@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Lookup{% endblock %}
+{% block nav_home %}active{% endblock %}
+{% block content %}
+
+<div style="display: flex; gap: 24px; flex-wrap: wrap;">
+
+<div class="card" style="flex: 1; min-width: 260px;">
+    <h2>Look up a hash</h2>
+    <form action="/result" method="get" onsubmit="showLoading()">
+        <label for="hash">Enter a 64-character SHA-256 hash</label>
+        <input type="text" id="hash" name="hash"
+               placeholder="e.g. 094fd325049b8a9cf6d3e5ef2a6d4cc6a567d7d49c35f8bb8dd9e3c6acf3d78d"
+               maxlength="64" autocomplete="off" spellcheck="false">
+        <div class="help-text">Only the hash is sent. Your files stay on your device.</div>
+        <button type="submit">Lookup</button>
+    </form>
+</div>
+
+<div class="card" style="flex: 1; min-width: 260px;">
+    <h2>Scan a file</h2>
+    <form id="upload-form">
+        <label for="file">Choose a file (any type: pdf, image, video, zip, etc.)</label>
+        <div class="file-area">
+            <label for="file" class="file-label" id="file-label">Choose File</label>
+            <input type="file" id="file" name="file" required>
+            <span class="file-name-text" id="file-name">No file chosen</span>
+        </div>
+        <div class="help-text">The file is hashed in memory and never stored on the server.</div>
+        <button type="submit" id="scan-btn">Scan</button>
+    </form>
+</div>
+
+</div>
+
+<div id="result-area">
+{% if result %}
+<div class="card" style="margin-top: 24px;">
+    <h2>Result</h2>
+    {% set display_hash = file_hash if file_hash else looked_up_hash %}
+    {% set display_name = file_name if file_name else looked_up_hash %}
+    {% if file_name %}
+    <div class="prop-grid">
+        <div class="prop-item">
+            <div class="prop-label">File Name</div>
+            <div class="prop-val">{{ file_name }}</div>
+        </div>
+        <div class="prop-item">
+            <div class="prop-label">File Size</div>
+            <div class="prop-val">{{ file_size }}</div>
+        </div>
+        <div class="prop-item">
+            <div class="prop-label">MIME Type</div>
+            <div class="prop-val">{{ mime_type }}</div>
+        </div>
+        <div class="prop-item">
+            <div class="prop-label">SHA-256</div>
+            <div class="prop-val" style="font-size:12px;">{{ display_hash }}</div>
+        </div>
+    </div>
+    {% endif %}
+    {% if looked_up_hash and not file_name %}
+    <div class="prop-grid">
+        <div class="prop-item">
+            <div class="prop-label">SHA-256</div>
+            <div class="prop-val" style="font-size:12px;">{{ looked_up_hash }}</div>
+        </div>
+    </div>
+    {% endif %}
+    <table>
+        <tr><th>Status</th><td>
+            {% set cls = 'tag-malicious' if result.status == 'malicious' else 'tag-clean' if result.status == 'clean' else 'tag-unknown' %}
+            <span class="tag {{ cls }}">{{ result.status }}</span>
+        </td></tr>
+        <tr><th>Malware Family</th><td>{{ result.family or 'N/A' }}</td></tr>
+        <tr><th>Confidence</th><td>{{ result.confidence if result.confidence is not none else 'N/A' }}</td></tr>
+        <tr><th>Source</th><td>{{ result.source or 'N/A' }}</td></tr>
+        <tr><th>First Seen</th><td>{{ result.first_seen or 'N/A' }}</td></tr>
+        <tr><th>Last Seen</th><td>{{ result.last_seen or 'N/A' }}</td></tr>
+    </table>
+</div>
+<script id="history-data" type="application/json">
+{
+    "sha256": "{{ display_hash }}",
+    "result": "{{ result.status }}",
+    "file_name": "{{ display_name }}"
+}
+</script>
+{% endif %}
+
+{% if error %}
+<div class="card" style="margin-top: 24px;">
+    <div class="error-box">{{ error }}</div>
+</div>
+{% endif %}
+</div>
+
+<script>
+function saveToHistory() {
+    var el = document.getElementById('history-data');
+    if (!el) return;
+    try {
+        var data = JSON.parse(el.textContent);
+        var history = JSON.parse(localStorage.getItem('signa_history') || '[]');
+        data.time = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+        history.unshift(data);
+        if (history.length > 50) history = history.slice(0, 50);
+        localStorage.setItem('signa_history', JSON.stringify(history));
+    } catch(e) {}
+}
+
+saveToHistory();
+
+document.getElementById('file').addEventListener('change', function() {
+    var name = this.files && this.files[0] ? this.files[0].name : 'No file chosen';
+    document.getElementById('file-name').textContent = name;
+});
+
+document.getElementById('upload-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var btn = document.getElementById('scan-btn');
+    var loading = document.getElementById('loading');
+    var resultArea = document.getElementById('result-area');
+
+    resultArea.innerHTML = '';
+    loading.classList.add('active');
+    btn.disabled = true;
+
+    var formData = new FormData();
+    formData.append('file', document.getElementById('file').files[0]);
+
+    try {
+        var resp = await fetch('/upload', { method: 'POST', body: formData });
+        var html = await resp.text();
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+        var newResult = doc.getElementById('result-area');
+        if (newResult) {
+            resultArea.innerHTML = newResult.innerHTML;
+            saveToHistory();
+        }
+    } catch (err) {
+        resultArea.innerHTML = '<div class="card" style="margin-top:24px;"><div class="error-box">Upload failed: ' + err.message + '</div></div>';
+    } finally {
+        loading.classList.remove('active');
+        btn.disabled = false;
+    }
+});
+</script>
+
+{% endblock %}

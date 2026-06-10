@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block nav_history %}active{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Scan History</h2>
+    <div id="history-container">
+        <div class="empty-state">Loading...</div>
+    </div>
+</div>
+
+<script>
+function renderHistory() {
+    var container = document.getElementById('history-container');
+    var history = JSON.parse(localStorage.getItem('signa_history') || '[]');
+
+    if (history.length === 0) {
+        container.innerHTML = '<div class="empty-state">No scans yet. Upload a file or look up a hash to get started.</div>';
+        return;
+    }
+
+    var table = document.createElement('table');
+    table.innerHTML = '<tr><th>Time</th><th>File / Hash</th><th>Result</th></tr>';
+    history.forEach(function(entry) {
+        var cls = entry.result === 'malicious' ? 'tag-malicious' : entry.result === 'clean' ? 'tag-clean' : 'tag-unknown';
+        var display = entry.file_name && entry.file_name.length === 64 ? entry.file_name.slice(0, 16) + '&hellip;' : entry.file_name || entry.sha256.slice(0, 16) + '&hellip;';
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td style="white-space:nowrap; font-size:12px;">' + (entry.time || '—') + '</td>' +
+            '<td style="font-size:12px; max-width:300px; overflow:hidden; text-overflow:ellipsis;">' +
+                '<a href="/result?hash=' + entry.sha256 + '" style="color:#555; text-decoration:none;">' + display + '</a>' +
+            '</td>' +
+            '<td><span class="tag ' + cls + '">' + entry.result + '</span></td>';
+        table.appendChild(tr);
+    });
+    container.innerHTML = '';
+    container.appendChild(table);
+}
+
+renderHistory();
+</script>
+
+{% endblock %}
