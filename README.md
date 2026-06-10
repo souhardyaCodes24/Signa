@@ -153,9 +153,6 @@ python -m cli.main --help
 
 **scan_history** -- Optional audit log of all lookups.
 
-## Deployment Plan
-
-See [DEPLOY.md](DEPLOY.md) for a complete guide to deploying Signa to production with Neon PostgreSQL and Render or Railway, including free tier analysis and step by step instructions.
 
 ## Contributing
 
